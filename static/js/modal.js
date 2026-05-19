@@ -72,9 +72,15 @@ async function loadChart(symbol, period) {
   if (window._chart) window._chart.destroy();
 
   try {
-    const history = await _fetchYahooChart(symbol, period);
+    // Prefer pre-computed 5Y data embedded in stocks.json (works offline/everywhere)
+    const stock     = window.AppState.allStocks.find(s => s.symbol === symbol);
+    const preloaded = (period === "5y" && stock?.h5y?.length > 0)
+      ? stock.h5y.map(h => ({ date: h.d, close: h.c }))
+      : null;
 
-    // Wrap in the same shape as the Flask response so the rendering code is identical
+    const history = preloaded || await _fetchYahooChart(symbol, period);
+
+    // Wrap in the same shape so the rendering code is identical
     const data = { history };
 
     if (data.history && data.history.length > 0) {
@@ -133,7 +139,7 @@ async function loadChart(symbol, period) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#8b949e";
     ctx.font      = "13px Inter, sans-serif";
-    ctx.fillText("Chart unavailable (CORS) — view on Yahoo Finance ↗", 12, 36);
+    ctx.fillText("5Y chart available after next GitHub Actions scan", 12, 36);
     const returnEl = document.getElementById("chart-return");
     if (returnEl) returnEl.innerHTML = "";
   }
@@ -226,7 +232,7 @@ async function showDetail(symbol) {
 
   $(".modal-overlay").classList.add("open");
   loadChart(symbol, "5y");
-  localAnalysis("summary");
+  loadNews();
 }
 
 function closeModal() {
