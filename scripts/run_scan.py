@@ -2,6 +2,11 @@
 Standalone scan script — run by GitHub Actions daily.
 Saves results to data/stocks.json relative to the repo root.
 
+Each stock entry includes:
+  - All fundamental fields (from core/scanner.py)
+  - h5y: 5Y weekly price history (for offline charts)
+  - news: up to 8 recent headlines (for offline news panel)
+
 Usage:
     python scripts/run_scan.py
 """
@@ -15,18 +20,16 @@ from pathlib import Path
 
 import yfinance as yf
 
-# Allow importing core/ from repo root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config import NSE_SYMBOLS
 from core.scanner import fetch_one
 
 OUTPUT  = Path(__file__).parent.parent / "data" / "stocks.json"
-WORKERS = 8   # lower count avoids Yahoo Finance crumb/session conflicts
+WORKERS = 8
 
 
 def _warmup():
-    """Establish a Yahoo Finance session (crumb) before parallel requests."""
     print("Warming up Yahoo Finance session...")
     for sym in ["RELIANCE", "TCS", "INFY"]:
         try:
@@ -38,11 +41,44 @@ def _warmup():
     print("  Warm-up failed — continuing anyway")
 
 
-def _fetch_with_retry(symbol: str, retries: int = 2) -> dict | None:
-    """Wrap fetch_one with simple retry on failure."""
+def _fetch_history(symbol: str) -> list:
+    """Fetch 5Y weekly close prices. Returns [{d, c}, ...]."""
+    try:
+        hist = yf.Ticker(f"{symbol}.NS").history(period="5y", interval="1wk")
+        result = []
+        for date, row in hist.iterrows():
+            close = row.get("Close")
+            if close is not None and close == close:  # NaN check
+                result.append({"d": date.strftime("%Y-%m-%d"), "c": round(float(close), 2)})
+        return result
+    except Exception:
+        return []
+
+
+def _fetch_news(symbol: str) -> list:
+    """Fetch recent news headlines. Returns [{t, u, p, d}, ...]."""
+    try:
+        items = []
+        for a in (yf.Ticker(f"{symbol}.NS").news or [])[:8]:
+            content = a.get("content", {}) or {}
+            title   = content.get("title") or a.get("title", "")
+            url     = (content.get("canonicalUrl") or {}).get("url") or a.get("link", "")
+            pub     = (content.get("provider") or {}).get("displayName") or a.get("publisher", "")
+            ts      = content.get("pubDate") or ""
+            if title and url:
+                items.append({"t": title, "u": url, "p": pub, "d": ts})
+        return items
+    except Exception:
+        return []
+
+
+def _fetch_all(symbol: str, retries: int = 2) -> dict | None:
+    """Fetch fundamentals + history + news with retry."""
     for attempt in range(retries + 1):
         result = fetch_one(symbol)
         if result is not None:
+            result["h5y"]  = _fetch_history(symbol)
+            result["news"] = _fetch_news(symbol)
             return result
         if attempt < retries:
             time.sleep(1.5 * (attempt + 1))
@@ -60,7 +96,7 @@ def main():
     print(f"Scanning {total} symbols with {WORKERS} workers...")
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        futures = {pool.submit(_fetch_with_retry, s): s for s in NSE_SYMBOLS}
+        futures = {pool.submit(_fetch_all, s): s for s in NSE_SYMBOLS}
         for fut in as_completed(futures):
             done += 1
             try:
