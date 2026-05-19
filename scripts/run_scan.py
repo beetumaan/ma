@@ -8,55 +8,79 @@ Usage:
 
 import json
 import sys
-import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yfinance as yf
+
 # Allow importing core/ from repo root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config import NSE_SYMBOLS, PSU_SYMBOLS
+from core.config import NSE_SYMBOLS
 from core.scanner import fetch_one
 
-OUTPUT = Path(__file__).parent.parent / "data" / "stocks.json"
-WORKERS = 20
+OUTPUT  = Path(__file__).parent.parent / "data" / "stocks.json"
+WORKERS = 8   # lower count avoids Yahoo Finance crumb/session conflicts
+
+
+def _warmup():
+    """Establish a Yahoo Finance session (crumb) before parallel requests."""
+    print("Warming up Yahoo Finance session...")
+    for sym in ["RELIANCE", "TCS", "INFY"]:
+        try:
+            yf.Ticker(f"{sym}.NS").info
+            print(f"  Session ready (via {sym})")
+            return
+        except Exception:
+            pass
+    print("  Warm-up failed — continuing anyway")
+
+
+def _fetch_with_retry(symbol: str, retries: int = 2) -> dict | None:
+    """Wrap fetch_one with simple retry on failure."""
+    for attempt in range(retries + 1):
+        result = fetch_one(symbol)
+        if result is not None:
+            return result
+        if attempt < retries:
+            time.sleep(1.5 * (attempt + 1))
+    return None
 
 
 def main():
-    total = len(NSE_SYMBOLS)
+    _warmup()
+
+    total   = len(NSE_SYMBOLS)
     results = []
-    errors = 0
-    done = 0
+    errors  = 0
+    done    = 0
 
     print(f"Scanning {total} symbols with {WORKERS} workers...")
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        futures = {pool.submit(fetch_one, s): s for s in NSE_SYMBOLS}
+        futures = {pool.submit(_fetch_with_retry, s): s for s in NSE_SYMBOLS}
         for fut in as_completed(futures):
             done += 1
-            sym = futures[fut]
             try:
                 data = fut.result()
                 if data:
                     results.append(data)
-                    status = "OK"
                 else:
-                    status = "no data"
                     errors += 1
-            except Exception as exc:
-                status = f"error: {exc}"
+            except Exception:
                 errors += 1
 
             if done % 50 == 0 or done == total:
                 print(f"  {done}/{total}  fetched={len(results)}  errors={errors}")
 
     payload = {
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at":    datetime.now(timezone.utc).isoformat(),
         "total_symbols": total,
         "total_fetched": len(results),
-        "errors": errors,
-        "stocks": results,
+        "errors":        errors,
+        "stocks":        results,
     }
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
