@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NSE Stock Screener</title>
+  <link rel="stylesheet" href="./static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <!-- ─ Header ─────────────────────────────────────────────────────── -->
+  <header>
+    <h1>NSE Stock Screener</h1>
+    <span class="tag">Nifty 500</span>
+    <span class="tag">GitHub Pages</span>
+    <span class="tag" style="margin-left:auto;color:var(--dim)">Data updated daily via Actions</span>
+  </header>
+
+  <!-- ─ Sidebar: Tabbed Filters ──────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Tab navigation -->
+    <div class="ftab-nav">
+      <button class="ftab active" id="ftab-btn-home" onclick="switchFilterTab('home')">
+        Home
+        <span class="ftab-badge" id="ftab-count" style="display:none">0</span>
+      </button>
+      <button class="ftab" id="ftab-btn-mcap"    onclick="switchFilterTab('mcap')">MCap</button>
+      <button class="ftab" id="ftab-btn-roe"     onclick="switchFilterTab('roe')">Returns</button>
+      <button class="ftab" id="ftab-btn-debt"    onclick="switchFilterTab('debt')">Debt</button>
+      <button class="ftab" id="ftab-btn-growth"  onclick="switchFilterTab('growth')">Growth</button>
+      <button class="ftab" id="ftab-btn-value"   onclick="switchFilterTab('value')">Value</button>
+      <button class="ftab" id="ftab-btn-risk"    onclick="switchFilterTab('risk')">Risk</button>
+      <button class="ftab" id="ftab-btn-owners"  onclick="switchFilterTab('owners')">Owners</button>
+      <button class="ftab" id="ftab-btn-sector"  onclick="switchFilterTab('sector')">Sector</button>
+    </div>
+
+    <!-- ─ Home panel ──────────────────────────────────────────────────── -->
+    <div class="ftab-panel active" id="ftab-home">
+      <div class="active-filter-list" id="active-filter-list">
+        <p class="no-filters-msg">No filters active — all stocks pass through</p>
+      </div>
+      <div class="actions">
+        <div id="data-status" class="data-status-badge">Loading data...</div>
+        <button class="btn btn-primary" onclick="loadStocksData()">Refresh Data</button>
+        <button class="btn btn-outline" onclick="resetAllFilters()">Reset Filters</button>
+        <button class="btn btn-outline" onclick="exportCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <!-- ─ Market Cap panel ────────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-mcap">
+      <div class="fpanel-title">Market Cap</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min MCap</span>
+          <span class="fblock-val" id="v-minMcap">0</span>
+          <span class="fblock-unit">Cr</span>
+        </div>
+        <input type="range" id="f-minMcap" min="0" max="500000" value="0" step="500">
+        <p class="fblock-hint">Excludes micro-caps below this value. Smaller = more volatile &amp; illiquid.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;1K Cr</span> Micro cap
+          <span class="scale-chip ok">1K–10K</span> Small cap
+          <span class="scale-chip good">&gt;10K Cr</span> Mid/Large
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max MCap</span>
+          <span class="fblock-val" id="v-maxMcap">2000000</span>
+          <span class="fblock-unit">Cr</span>
+        </div>
+        <input type="range" id="f-maxMcap" min="0" max="2000000" value="2000000" step="10000">
+        <p class="fblock-hint">Excludes mega-caps. For a ₹50K portfolio, large caps offer less upside — mid-caps tend to grow faster.</p>
+      </div>
+    </div>
+
+    <!-- ─ Returns / Profitability panel ──────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-roe">
+      <div class="fpanel-title">Profitability</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min ROE</span>
+          <span class="fblock-val" id="v-minROE">0</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minROE" min="0" max="40" value="0" step="1">
+        <p class="fblock-hint">Return on Equity — profit per ₹1 of shareholder money. Higher = more capital-efficient business.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;8%</span> Weak
+          <span class="scale-chip ok">8–15%</span> Decent
+          <span class="scale-chip good">&gt;15%</span> Strong
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min 3Y Avg ROE</span>
+          <span class="fblock-val" id="v-minRoe3y">0</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minRoe3y" min="0" max="40" value="0" step="1">
+        <p class="fblock-hint">Average ROE across the last 3 years. Filters out "lucky year" stocks — only shows consistently profitable businesses.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;8%</span> Inconsistent
+          <span class="scale-chip ok">8–15%</span> Decent
+          <span class="scale-chip good">&gt;15%</span> Quality
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Dividend Yield</span>
+          <span class="fblock-val" id="v-minDividendYield">0</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minDividendYield" min="0" max="10" value="0" step="0.1">
+        <p class="fblock-hint">Annual dividend as % of price. A dividend gives downside cushion in uncertain markets. Default 0 = filter off.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip ok">1–2%</span> Moderate
+          <span class="scale-chip good">&gt;3%</span> Income stock
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-onlyProfitable">
+          <div>
+            <span class="fblock-name">Only Profitable</span>
+            <p class="fblock-hint">Show only companies with positive ROE — actually making money, not burning cash.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Debt / Balance Sheet panel ─────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-debt">
+      <div class="fpanel-title">Balance Sheet</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max Debt / Equity</span>
+          <span class="fblock-val" id="v-maxDebtEquity">30</span>
+        </div>
+        <input type="range" id="f-maxDebtEquity" min="0" max="30" value="30" step="0.1">
+        <p class="fblock-hint">Total borrowed money ÷ shareholder equity. Lower = financially safer. High D/E means more interest burden.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip good">&lt;0.5</span> Very safe
+          <span class="scale-chip ok">0.5–1</span> Moderate
+          <span class="scale-chip bad">&gt;1.5</span> Risky
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Current Ratio</span>
+          <span class="fblock-val" id="v-minCurrentRatio">0</span>
+        </div>
+        <input type="range" id="f-minCurrentRatio" min="0" max="5" value="0" step="0.1">
+        <p class="fblock-hint">Current Assets ÷ Current Liabilities. Can the company pay its short-term bills? Below 1 = red flag.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;1</span> Tight
+          <span class="scale-chip ok">1–1.5</span> Adequate
+          <span class="scale-chip good">&gt;1.5</span> Comfortable
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Interest Coverage</span>
+          <span class="fblock-val" id="v-minICR">0</span>
+          <span class="fblock-unit">x</span>
+        </div>
+        <input type="range" id="f-minICR" min="0" max="20" value="0" step="0.5">
+        <p class="fblock-hint">EBIT ÷ Interest Expense. How easily can the company pay its interest? Below 1.5 is the danger zone.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;1.5</span> Risky
+          <span class="scale-chip ok">1.5–5</span> Adequate
+          <span class="scale-chip good">&gt;5</span> Very safe
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Growth panel ────────────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-growth">
+      <div class="fpanel-title">Growth</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Revenue Growth</span>
+          <span class="fblock-val" id="v-minRevenueGr">-50</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minRevenueGr" min="-50" max="50" value="-50" step="1">
+        <p class="fblock-hint">Year-over-year top-line sales growth. Negative = shrinking business.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;0%</span> Declining
+          <span class="scale-chip ok">5–15%</span> Steady
+          <span class="scale-chip good">&gt;15%</span> Strong
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Earnings Growth</span>
+          <span class="fblock-val" id="v-minEarningsGr">-50</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minEarningsGr" min="-50" max="50" value="-50" step="1">
+        <p class="fblock-hint">YoY profit growth. Earnings growing faster than revenue = margin expansion (bullish signal).</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;0%</span> Declining
+          <span class="scale-chip ok">5–20%</span> Decent
+          <span class="scale-chip good">&gt;20%</span> Excellent
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Qtr Profit Growth</span>
+          <span class="fblock-val" id="v-minQtrProfGr">-100</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minQtrProfGr" min="-100" max="100" value="-100" step="5">
+        <p class="fblock-hint">Latest quarter profit vs previous quarter. Shows current momentum — is the business accelerating?</p>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max Qtr Profit Growth</span>
+          <span class="fblock-val" id="v-maxQtrProfGr">10000</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-maxQtrProfGr" min="50" max="10000" value="10000" step="50">
+        <p class="fblock-hint">Cap to remove one-time windfalls. &gt;200% usually = non-recurring gain (asset sale, tax refund), not organic growth.</p>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min 5Y Sales CAGR</span>
+          <span class="fblock-val" id="v-minSalesCagr">-50</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minSalesCagr" min="-50" max="50" value="-50" step="1">
+        <p class="fblock-hint">Revenue compound growth over 5 years. Smooths out bumps — shows the true long-term sales trajectory.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;5%</span> Stagnant
+          <span class="scale-chip ok">5–15%</span> Moderate
+          <span class="scale-chip good">&gt;15%</span> High growth
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min 5Y Profit CAGR</span>
+          <span class="fblock-val" id="v-minProfitCagr">-50</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minProfitCagr" min="-50" max="50" value="-50" step="1">
+        <p class="fblock-hint">Profit compounding over 5 years. &gt;15% consistently = true compounder. Best long-term wealth creation metric.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;5%</span> Slow
+          <span class="scale-chip ok">5–20%</span> Steady
+          <span class="scale-chip good">&gt;20%</span> Compounder
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Valuation panel ────────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-value">
+      <div class="fpanel-title">Valuation</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max P/E</span>
+          <span class="fblock-val" id="v-maxPE">500</span>
+          <span class="fblock-unit">x</span>
+        </div>
+        <input type="range" id="f-maxPE" min="5" max="500" value="500" step="1">
+        <p class="fblock-hint">Price ÷ Earnings — how many years of profit you're paying for. High P/E = market expects strong future growth.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip good">&lt;15</span> Value zone
+          <span class="scale-chip ok">15–30</span> Fair
+          <span class="scale-chip bad">&gt;40</span> Expensive
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max PEG</span>
+          <span class="fblock-val" id="v-maxPEG">10</span>
+          <span class="fblock-unit">x</span>
+        </div>
+        <input type="range" id="f-maxPEG" min="0" max="10" value="10" step="0.1">
+        <p class="fblock-hint">P/E ÷ Earnings Growth %. Adjusts valuation for growth. PEG &lt;1 = undervalued for the growth it delivers.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip good">&lt;1</span> Undervalued
+          <span class="scale-chip ok">1–2</span> Fair
+          <span class="scale-chip bad">&gt;2</span> Overpriced
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Risk & Price panel ─────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-risk">
+      <div class="fpanel-title">Risk &amp; Price</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Avg Daily Volume</span>
+          <span class="fblock-val" id="v-minAvgVolCr">0</span>
+          <span class="fblock-unit">₹ Cr</span>
+        </div>
+        <input type="range" id="f-minAvgVolCr" min="0" max="50" value="0" step="0.5">
+        <p class="fblock-hint">Average daily traded value. Too little = you can't enter/exit without moving the price. For ₹50K positions, set 1–3 Cr minimum.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;1 Cr</span> Illiquid
+          <span class="scale-chip ok">1–5 Cr</span> Tradeable
+          <span class="scale-chip good">&gt;5 Cr</span> Liquid
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max Beta</span>
+          <span class="fblock-val" id="v-maxBeta">5</span>
+        </div>
+        <input type="range" id="f-maxBeta" min="0" max="5" value="5" step="0.1">
+        <p class="fblock-hint">Volatility vs Nifty 50. Beta 1 = moves with market. &lt;0.8 = defensive. &gt;1.5 = amplified swings both ways.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip good">&lt;0.8</span> Defensive
+          <span class="scale-chip ok">0.8–1.2</span> Market-like
+          <span class="scale-chip bad">&gt;1.5</span> Volatile
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max Price</span>
+          <span class="fblock-val" id="v-maxPrice">200000</span>
+          <span class="fblock-unit">₹</span>
+        </div>
+        <input type="range" id="f-maxPrice" min="50" max="200000" value="200000" step="100">
+        <p class="fblock-hint">Max share price you can afford per lot. With ₹50K, a lower price lets you hold more stocks for diversification.</p>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Dip from 52W High</span>
+          <span class="fblock-val" id="v-minDipPct">0</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minDipPct" min="0" max="60" value="0" step="1">
+        <p class="fblock-hint">Find stocks that have fallen from their recent peak. A dip with strong fundamentals = potential buying opportunity.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip ok">15–30%</span> Opportunity?
+          <span class="scale-chip bad">&gt;40%</span> Investigate why
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Ownership panel ────────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-owners">
+      <div class="fpanel-title">Ownership</div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Min Promoter Holding</span>
+          <span class="fblock-val" id="v-minPromoter">0</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-minPromoter" min="0" max="90" value="0" step="1">
+        <p class="fblock-hint">% of shares held by founders. High = skin in the game. Falling promoter stake over quarters = red flag.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip bad">&lt;30%</span> Low
+          <span class="scale-chip ok">40–60%</span> Moderate
+          <span class="scale-chip good">&gt;60%</span> High conviction
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-header">
+          <span class="fblock-name">Max Pledged</span>
+          <span class="fblock-val" id="v-maxPledged">100</span>
+          <span class="fblock-unit">%</span>
+        </div>
+        <input type="range" id="f-maxPledged" min="0" max="100" value="100" step="1">
+        <p class="fblock-hint">% of promoter shares pledged as loan collateral. If stock drops, lenders force-sell shares → crash spiral risk.</p>
+        <div class="fblock-scale">
+          <span class="scale-chip good">0%</span> No pledging
+          <span class="scale-chip ok">1–20%</span> Watch closely
+          <span class="scale-chip bad">&gt;20%</span> High risk
+        </div>
+      </div>
+    </div>
+
+    <!-- ─ Sector panel ────────────────────────────────────────────────── -->
+    <div class="ftab-panel" id="ftab-sector">
+      <div class="fpanel-title">Sector Filters</div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-onlyAI">
+          <div>
+            <span class="fblock-name">AI / Tech / Semi only</span>
+            <p class="fblock-hint">Only software, semiconductor, IT, electronics, cloud, and automation companies.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-onlyLowCrude">
+          <div>
+            <span class="fblock-name">Excl Crude-Sensitive</span>
+            <p class="fblock-hint">Removes oil marketing, airlines, paints, logistics — their margins get crushed when crude prices rise.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-exclBanks">
+          <div>
+            <span class="fblock-name">Excl Banks / NBFCs</span>
+            <p class="fblock-hint">Banks naturally have high D/E — standard ROE/debt filters don't apply fairly to them.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-exclCommodity">
+          <div>
+            <span class="fblock-name">Excl Commodity Cyclicals</span>
+            <p class="fblock-hint">Steel, coal, metals — profits swing wildly with commodity prices. Hard to value consistently.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-exclRealEstate">
+          <div>
+            <span class="fblock-name">Excl Real Estate</span>
+            <p class="fblock-hint">Lumpy revenue, project delays, boom-bust cycles. Poor fit for fundamentals-based screening.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-block">
+        <div class="fblock-toggle">
+          <input type="checkbox" id="f-exclPSU">
+          <div>
+            <span class="fblock-name">Excl PSU</span>
+            <p class="fblock-hint">Government companies prioritize policy over shareholder returns. Often undervalued for structural reasons.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Industry multi-select -->
+      <div class="filter-block" id="industry-filter-block" style="display:none">
+        <div class="fblock-name" style="margin-bottom:6px">Exclude Industries</div>
+        <p class="fblock-hint" style="margin-bottom:8px">Check industries to exclude. Run a scan first to populate the list.</p>
+        <input type="text" id="industry-search" placeholder="Search industries..." class="industry-search-input"
+               oninput="filterIndustryList(this.value)">
+        <div class="industry-list" id="industry-list"></div>
+        <button class="industry-clear-btn" onclick="clearIndustryExclusions()">Clear all exclusions</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ─ Main content ───────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="label">Scanned</div>
+        <div class="value accent" id="stat-total">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Matching</div>
+        <div class="value green" id="stat-filtered">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Avg ROE</div>
+        <div class="value" id="stat-avg-roe">--</div>
+      </div>
+      <div class="stat">
+        <div class="label">Filters Active</div>
+        <div class="value accent" id="stat-filters">0</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-col="symbol">Symbol</th>
+            <th data-col="name">Name</th>
+            <th>Tags</th>
+            <th data-col="price">Price</th>
+            <th data-col="marketCapCr">MCap</th>
+            <th data-col="roe">ROE%</th>
+            <th data-col="debtToEquity">D/E</th>
+            <th data-col="revenueGrowth">Rev Gr%</th>
+            <th data-col="earningsGrowth">Earn Gr%</th>
+            <th data-col="pe">P/E</th>
+            <th data-col="beta">Beta</th>
+            <th data-col="promoterHolding">Promoter%</th>
+            <th data-col="dipFrom52wHigh">Dip%</th>
+            <th data-col="qtrProfitGrowth">QtrProfGr%</th>
+            <th data-col="sales5yCagr">5YSalesCAGR%</th>
+            <th data-col="profit5yCagr">5YProfitCAGR%</th>
+            <th data-col="interestCoverage">ICR</th>
+            <th data-col="pledgedPct">Pledged%</th>
+            <th data-col="sector">Sector</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+
+<!-- ─ Filter Info Popup ────────────────────────────────────────────── -->
+<div class="info-overlay" onclick="if(event.target===this)closeFilterInfo()">
+  <div class="info-popup">
+    <div class="info-popup-header">
+      <h3 id="info-title"></h3>
+      <button class="info-popup-close" onclick="closeFilterInfo()">&times;</button>
+    </div>
+    <div class="info-body" id="info-body"></div>
+  </div>
+</div>
+
+<!-- ─ Detail Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal modal-with-ai">
+    <!-- Left: existing detail content -->
+    <div class="modal-left">
+      <div class="modal-header">
+        <h2 id="modal-title">Stock Detail</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="chart-header">
+        <div class="timeframe-tabs" id="timeframe-tabs"></div>
+        <div class="chart-return" id="chart-return"></div>
+      </div>
+      <div class="chart-container">
+        <canvas id="price-chart"></canvas>
+      </div>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="external-links" id="external-links"></div>
+    </div>
+
+    <!-- Right: Gemini AI Search panel -->
+    <div class="search-panel">
+      <div class="search-panel-header">
+        <div class="search-panel-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          AI Search
+        </div>
+        <span class="search-panel-badge">News + Analysis</span>
+      </div>
+
+      <div class="search-chips-row">
+        <button class="search-chip" onclick="loadNews()">Latest News</button>
+        <button class="search-chip" onclick="localAnalysis('summary')">Summary</button>
+        <button class="search-chip" onclick="localAnalysis('should i buy')">Buy / Sell?</button>
+        <button class="search-chip" onclick="localAnalysis('risk analysis')">Risk</button>
+        <button class="search-chip" onclick="localAnalysis('valuation')">Valuation</button>
+        <button class="search-chip" onclick="localAnalysis('growth')">Growth</button>
+        <button class="search-chip" onclick="localAnalysis('balance sheet')">Balance Sheet</button>
+        <button class="search-chip" onclick="localAnalysis('dividend')">Dividend</button>
+      </div>
+
+      <div class="ai-response-area" id="ai-response-area">
+        <div class="ai-welcome-state">
+          <div class="ai-welcome-icon">&#128240;</div>
+          <p>Loading latest news...</p>
+        </div>
+      </div>
+
+      <div class="ai-sources" id="ai-sources"></div>
+
+      <div class="search-input-wrap">
+        <input type="text" id="search-input" placeholder="Search on Google..." autocomplete="off"
+               onkeydown="if(event.key==='Enter')googleSearch(this.value)">
+        <button class="search-send-btn" onclick="googleSearch($('#search-input').value)">&#10148;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load order matters: constants first, then state, then logic, then UI -->
+<script src="./static/js/constants.js"></script>
+<script src="./static/js/state.js"></script>
+<script src="./static/js/insights.js"></script>
+<script src="./static/js/filters.js"></script>
+<script src="./static/js/table.js"></script>
+<script src="./static/js/modal.js"></script>
+<script src="./static/js/search.js"></script>
+<script src="./static/js/export.js"></script>
+</body>
+</html>
