@@ -30,15 +30,21 @@ WORKERS = 8
 
 
 def _warmup():
+    """Establish Yahoo Finance crumb before parallel requests start."""
     print("Warming up Yahoo Finance session...")
-    for sym in ["RELIANCE", "TCS", "INFY"]:
-        try:
-            yf.Ticker(f"{sym}.NS").info
-            print(f"  Session ready (via {sym})")
-            return
-        except Exception:
-            pass
-    print("  Warm-up failed — continuing anyway")
+    for attempt in range(5):
+        for sym in ["RELIANCE", "TCS", "INFY"]:
+            try:
+                info = yf.Ticker(f"{sym}.NS").info
+                if info and info.get("regularMarketPrice"):
+                    print(f"  Session ready (via {sym}, attempt {attempt + 1})")
+                    return
+            except Exception:
+                pass
+        wait = 3 * (attempt + 1)
+        print(f"  Attempt {attempt + 1} failed — retrying in {wait}s...")
+        time.sleep(wait)
+    print("  Warm-up failed after 5 attempts — continuing anyway")
 
 
 def _fetch_history(symbol: str) -> list:
